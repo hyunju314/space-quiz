@@ -74,6 +74,10 @@
     .dots { display: flex; gap: 6px; justify-content: center; margin: 22px 0 6px; }
     .dot { width: 12px; height: 12px; border-radius: 50%; }
     .dot.good { background: #54b587; } .dot.bad { background: #e77e91; }
+    .secondary { border: 1px solid var(--line); border-radius: 10px; width: 100%; background: var(--option); color: var(--text); font-size: 13px; font-weight: 650; padding: 13px 18px; margin-top: 17px; transition: border-color .2s, background .2s, transform .2s; }
+    .secondary:hover { border-color: var(--purple); background: var(--purple-soft); transform: translateY(-1px); }
+    .copy-feedback { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
+    .manual-copy { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--option); color: var(--text); font: inherit; font-size: 12px; padding: 9px 10px; margin-top: 8px; user-select: all; }
     .enter { animation: enter .35s ease; }
     [hidden] { display: none !important; }
     @keyframes float { 50% { transform: translateY(-7px) rotate(2deg); } }
@@ -171,6 +175,10 @@
           <div><strong id="wrong-total" style="color:var(--red)"></strong><small>To discover</small></div>
           <div><strong id="accuracy"></strong><small>Accuracy</small></div>
         </div>
+        <button class="secondary" id="copy-result" type="button">Copy result</button>
+        <p class="copy-feedback" id="copy-feedback" role="status" aria-live="polite" aria-atomic="true"></p>
+        <label id="manual-copy-label" for="manual-copy" hidden>Result text to copy manually</label>
+        <input class="manual-copy" id="manual-copy" type="text" readonly aria-labelledby="manual-copy-label" hidden>
         <button class="primary" id="restart">Explore again <span aria-hidden="true">↻</span></button>
         <p class="card-footer">The universe always has more to teach us.</p>
       </div>
@@ -196,6 +204,7 @@
     let score = 0;
     let answered = false;
     let history = [];
+    let copyRequest = 0;
 
     function updateProgress(completed) {
       $("progress").style.width = `${completed / questions.length * 100}%`;
@@ -268,6 +277,7 @@
     }
 
     function showResults() {
+      resetCopyFeedback();
       $("quiz").hidden = true;
       $("results").hidden = false;
       const reaction = score >= 8
@@ -294,12 +304,46 @@
       $("result-title").focus({ preventScroll: true });
     }
 
+    function resetCopyFeedback() {
+      copyRequest++;
+      $("copy-result").removeAttribute("aria-disabled");
+      $("copy-feedback").textContent = "";
+      $("manual-copy").value = "";
+      $("manual-copy").hidden = true;
+      $("manual-copy-label").hidden = true;
+    }
+
+    $("copy-result").addEventListener("click", async () => {
+      if ($("results").hidden || $("copy-result").getAttribute("aria-disabled") === "true") return;
+      const request = ++copyRequest;
+      const shareText = `I scored ${score} out of ${questions.length} on the Orbit space quiz!`;
+      $("copy-result").setAttribute("aria-disabled", "true");
+      $("copy-feedback").textContent = "Copying result...";
+      $("manual-copy").hidden = true;
+      $("manual-copy-label").hidden = true;
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable.");
+        await navigator.clipboard.writeText(shareText);
+        if (request !== copyRequest) return;
+        $("copy-feedback").textContent = "Result copied! Share it with your friends.";
+      } catch {
+        if (request !== copyRequest) return;
+        $("copy-feedback").textContent = "Couldn't copy automatically. Select and copy the result below:";
+        $("manual-copy").value = shareText;
+        $("manual-copy-label").hidden = false;
+        $("manual-copy").hidden = false;
+      } finally {
+        if (request === copyRequest) $("copy-result").removeAttribute("aria-disabled");
+      }
+    });
+
     $("next").addEventListener("click", () => {
       if (!answered) return;
       if (current === questions.length - 1) showResults();
       else { current++; showQuestion(true); }
     });
     $("restart").addEventListener("click", () => {
+      resetCopyFeedback();
       current = 0;
       score = 0;
       history = [];
